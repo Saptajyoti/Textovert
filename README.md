@@ -49,10 +49,10 @@ The `.env` files contain placeholders and are ignored by Git. Edit them locally 
 In the Supabase dashboard:
 
 1. Create a Supabase project and copy its project URL and **publishable key** (formerly the anon/public key).
-2. In `client/.env`, set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_URL` to the Express server origin (default `http://localhost:5000`).
-3. In `server/.env`, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `CLIENT_URL`. `CLIENT_URL` accepts a comma-separated list of trusted frontend origins.
+2. In `client/.env`, set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_API_URL` to the Express server's local origin. Configure the API origin explicitly; the frontend has no hardcoded local or production API fallback.
+3. In `server/.env`, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `CLIENT_URL`. `CLIENT_URL` accepts a comma-separated list of trusted frontend origins. The API has no implicit browser-origin allowlist; configure it explicitly for local development and deployment.
 4. In Supabase **Authentication → Providers**, enable Email. Configure whether email confirmation is required.
-5. In **Authentication → URL Configuration**, add `http://localhost:5173/login` to the allowed redirect URLs. For production, add the deployed frontend's corresponding login URL.
+5. In **Authentication → URL Configuration**, add the local frontend's `/login` URL and the deployed frontend's corresponding `/login` URL to the allowed redirect URLs.
 6. The initial schema migration has already been applied for this project. Apply the additive `database/migrations/202610260002_private_conversation_invitations.sql` migration once in the Supabase SQL Editor to enable private invitations. Do not rerun the initial migration or this additive migration after it succeeds; it is an ordered, one-time migration rather than an idempotent script. The new migration wraps its preflight, DDL, and backfill in one transaction. Apply it as the project database owner (`postgres`); the migration assigns its guarded `SECURITY DEFINER` functions to that role. It aborts on usernames outside the supported format, case-insensitive username collisions, private conversations with zero or more than two members, missing creators or non-member roles, or duplicate participant pairs. A valid single-member conversation is left unpaired because its intended recipient cannot be inferred and will not be available through the private messaging API.
 7. After migration `202610260002_private_conversation_invitations.sql` has succeeded, apply `database/migrations/202610270001_realtime_presence_read_receipts.sql` once in the Supabase SQL Editor as `postgres`. This additive transaction backfills the existing `message_receipts` table, creates delivered receipts for future messages, adds sender-only receipt reads, and installs authenticated RPCs for marking messages read and listing authorized private-conversation partners. Do not rerun it after it succeeds.
 8. After `202610270001_realtime_presence_read_receipts.sql` succeeds, apply `database/migrations/202610270002_rich_messaging.sql` once in the Supabase SQL Editor as `postgres`. It adds optional reply/attachment fields, a normalized reaction table, and a private `conversation-media` Storage bucket with a 10 MiB size cap and supported MIME allowlist. It does not insert an authenticated Storage upload policy: uploads go through the authenticated backend so it can validate file contents before using its server-only storage credential. Private reads use signed URLs, and users may delete only their own uploaded objects.
@@ -107,7 +107,7 @@ Add these environment variables to the service:
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | `https://textovert.vercel.app`; comma-separate additional trusted origins |
+| `CLIENT_URL` | The exact Vercel frontend origin; comma-separate additional trusted origins |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role/secret key; required for validated media uploads and server-side push delivery. Add it as a Render secret and never to Vercel. |
@@ -120,7 +120,7 @@ Render Web Services support WebSocket upgrades. The server listens on the assign
 
 The Express app trusts the single Render proxy hop so IP-based API rate limits use the client IP forwarded by Render rather than treating all visitors as one address.
 
-Once deployed, note the service URL, such as `https://textovert-api.onrender.com`. Verify `https://<service-host>/api/health` returns `{"status":"ok","service":"textovert-api"}` and `/api/ready` returns `ready`. Health is a liveness check; readiness confirms required configuration but does not test a live Supabase query.
+Once deployed, copy the Render service origin from its dashboard. Verify `<render-service-origin>/api/health` returns `{"status":"ok","service":"textovert-api"}` and `<render-service-origin>/api/ready` returns `ready`. Health is a liveness check; readiness confirms the required Supabase keys, media-storage credential, and configured browser origin but does not test a live Supabase query.
 
 ### 2. Deploy the frontend to Vercel
 
@@ -138,11 +138,11 @@ The root `vercel.json` sends browser routes such as `/chat` back to the Vite app
 
 | Variable | Value |
 | --- | --- |
-| `VITE_API_URL` | `https://textovert-xpff.onrender.com` |
+| `VITE_API_URL` | The Render service origin only |
 | `VITE_SUPABASE_URL` | The same Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | The same Supabase publishable key |
 
-Set `VITE_API_URL` to the Render origin only; do not append `/api`, because the client adds that path. The currently served `textovert.vercel.app` bundle was found pointing at the old `textovert-hu6f.onrender.com` service. Redeploy Vercel from this repository after correcting the variable. In Render, set `CLIENT_URL` to the exact frontend origin `https://textovert.vercel.app`; do not use a wildcard or a full page URL.
+Set `VITE_API_URL` to the Render origin only; do not append `/api`, because the client adds that path. In Render, set `CLIENT_URL` to the exact frontend origin configured for the Vercel project; do not use a wildcard or a full page URL.
 
 Vite embeds `VITE_*` values into the public frontend at build time. They must never contain a service-role key, database password, or other secret. Redeploy after changing them. For Preview deployments, use a separate test backend/project when possible; do not allow arbitrary preview domains in production `CLIENT_URL`.
 
@@ -150,7 +150,7 @@ The frontend includes an installable PWA manifest and app icons. Vercel serves t
 
 ### 3. Allow the deployed login redirect in Supabase
 
-In Supabase **Authentication → URL Configuration**, set the Site URL to the canonical Vercel frontend URL and add its `/login` URL to the allowed redirect URLs (for example `https://textovert.vercel.app/login`). Add any custom production domain and its `/login` URL as well. Registration redirects to `/login` on the current frontend origin. Keep email confirmation settings consistent with the production signup experience.
+In Supabase **Authentication → URL Configuration**, set the Site URL to the canonical Vercel frontend URL and add its `/login` URL to the allowed redirect URLs. Add any custom production domain and its `/login` URL as well. Registration redirects to `/login` on the current frontend origin. Keep email confirmation settings consistent with the production signup experience.
 
 ### Environment variable inventory
 
@@ -158,14 +158,14 @@ In Supabase **Authentication → URL Configuration**, set the Site URL to the ca
 | --- | --- | --- | --- |
 | `VITE_SUPABASE_URL` | Vercel build environment; `client/.env` locally | Yes | Public Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Vercel build environment; `client/.env` locally | Yes | Browser-safe publishable key, not a service-role key |
-| `VITE_API_URL` | Vercel build environment; `client/.env` locally | Yes in production | HTTPS origin of the Render API; localhost fallback is development-only |
+| `VITE_API_URL` | Vercel build environment; `client/.env` locally | Yes | Explicit API origin; HTTPS is enforced in production |
 | `SUPABASE_URL` | Render service; `server/.env` locally | Yes | Server-side Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Render service; `server/.env` locally | Yes | Used with each verified user's access token for normal authenticated database access |
 | `SUPABASE_SERVICE_ROLE_KEY` | Render service; `server/.env` locally | Yes for media and Web Push delivery | Server-only secret for validated private media uploads and trusted push subscription delivery. Never add it to Vercel or a `VITE_*` variable. |
 | `VAPID_PUBLIC_KEY` | Render service; `server/.env` locally | Optional | Required only to enable true browser Web Push; returned to authenticated clients through the API, not a Vite variable |
 | `VAPID_PRIVATE_KEY` | Render service; `server/.env` locally | Optional | VAPID signing secret; keep only in Render/server environment |
 | `VAPID_SUBJECT` | Render service; `server/.env` locally | Optional | Owner-controlled VAPID contact URI; required together with both VAPID keys |
-| `CLIENT_URL` | Render service; `server/.env` locally | Yes in production | Exact trusted frontend origin(s), comma-separated |
+| `CLIENT_URL` | Render service; `server/.env` locally | Yes | Exact trusted frontend origin(s), comma-separated; no implicit allowlist |
 | `NODE_ENV` | Render service | Yes | Set to `production` |
 | `PORT` | Assigned by Render | Platform-provided | Do not hard-code or override in Render |
 
@@ -186,11 +186,10 @@ npm run dev:client
 npm run dev:server
 ```
 
-- Frontend: <http://localhost:5173>
-- API health: <http://localhost:5000/api/health>
-- API readiness: <http://localhost:5000/api/ready>
+- Use the frontend and API origins printed/configured for your local Vite and Express processes. Set `VITE_API_URL` to the Express origin and `CLIENT_URL` to the Vite origin in their respective `.env` files; the application does not supply implicit localhost URL defaults.
+- Check `/api/health` and `/api/ready` on the configured API origin.
 
-The readiness endpoint reports `not_ready` until both server-side Supabase settings are configured. The health endpoint only reports API process health. Protected messaging endpoints require an `Authorization: Bearer <access-token>` header:
+The readiness endpoint reports `not_ready` until `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and at least one valid `CLIENT_URL` are configured. The health endpoint only reports API process health; readiness does not test a live Supabase query. Protected messaging endpoints require an `Authorization: Bearer <access-token>` header:
 
 - `GET /api/conversations` — accepted private conversations for the signed-in user
 - `GET /api/conversations/users/lookup?username=<exact-username>` — limited profile discovery

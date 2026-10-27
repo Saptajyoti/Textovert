@@ -31,7 +31,7 @@ function configuredOrigins() {
   if (configured) {
     return configured.split(',').map((origin) => normalizeOrigin(origin.trim())).filter(Boolean)
   }
-  return process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173']
+  return []
 }
 
 const allowedOrigins = configuredOrigins()

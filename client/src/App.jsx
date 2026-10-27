@@ -1,13 +1,14 @@
 import { MotionConfig } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Download, WifiOff, X } from 'lucide-react'
 import { useAuth } from './contexts/useAuth.js'
 import ProtectedRoute from './components/common/ProtectedRoute.jsx'
-import LandingPage from './pages/LandingPage.jsx'
-import LoginPage from './pages/LoginPage.jsx'
-import RegisterPage from './pages/RegisterPage.jsx'
-import ChatPage from './pages/ChatPage.jsx'
+
+const LandingPage = lazy(() => import('./pages/LandingPage.jsx'))
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'))
+const ChatPage = lazy(() => import('./pages/ChatPage.jsx'))
 
 function AuthSessionRedirect() {
   const { user, authLoading, profileStatus } = useAuth()
@@ -147,13 +148,15 @@ export default function App() {
       <div className="app-shell">
         <PwaControls />
         <AuthSessionRedirect />
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-          <Route path="*" element={<LandingPage />} />
-        </Routes>
+        <Suspense fallback={<div className="auth-loading" role="status">Loading Textovert…</div>}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+            <Route path="*" element={<LandingPage />} />
+          </Routes>
+        </Suspense>
       </div>
     </MotionConfig>
   )

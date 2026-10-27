@@ -1,10 +1,10 @@
 import { supabase } from './supabase.js'
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim()
-const apiBaseUrl = configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:5000' : '')
+const apiBaseUrl = configuredApiUrl
 
 if (!apiBaseUrl) {
-  throw new Error('VITE_API_URL must be set to the deployed Textovert API URL.')
+  throw new Error('VITE_API_URL must be set to the Textovert API URL.')
 }
 
 let parsedApiUrl
@@ -17,11 +17,15 @@ try {
 if (!['http:', 'https:'].includes(parsedApiUrl.protocol)) {
   throw new Error('VITE_API_URL must use HTTP or HTTPS.')
 }
+if (parsedApiUrl.username || parsedApiUrl.password ||
+  parsedApiUrl.pathname !== '/' || parsedApiUrl.search || parsedApiUrl.hash) {
+  throw new Error('VITE_API_URL must contain only the API origin, without credentials, paths, or query strings.')
+}
 if (import.meta.env.PROD && parsedApiUrl.protocol !== 'https:') {
   throw new Error('VITE_API_URL must use HTTPS in production.')
 }
 
-const normalizedApiUrl = parsedApiUrl.toString().replace(/\/+$/, '')
+const normalizedApiUrl = parsedApiUrl.origin
 
 export async function getAccessToken() {
   if (!supabase) throw new Error('Supabase is not configured.')
