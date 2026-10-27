@@ -88,7 +88,7 @@ Add these environment variables to the service:
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `CLIENT_URL` | Exact public frontend origin, for example `https://textovert.vercel.app`; comma-separate additional trusted origins, with no trailing slash |
+| `CLIENT_URL` | `https://textovert.vercel.app`; comma-separate additional trusted origins |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
 | `PORT` | Do not set manually; Render assigns it |
@@ -115,9 +115,11 @@ The root `vercel.json` sends browser routes such as `/chat` back to the Vite app
 
 | Variable | Value |
 | --- | --- |
-| `VITE_API_URL` | Render API origin, e.g. `https://textovert-api.onrender.com` |
+| `VITE_API_URL` | `https://textovert-xpff.onrender.com` |
 | `VITE_SUPABASE_URL` | The same Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | The same Supabase publishable key |
+
+Set `VITE_API_URL` to the Render origin only; do not append `/api`, because the client adds that path. The currently served `textovert.vercel.app` bundle was found pointing at the old `textovert-hu6f.onrender.com` service. Redeploy Vercel from this repository after correcting the variable. In Render, set `CLIENT_URL` to the exact frontend origin `https://textovert.vercel.app`; do not use a wildcard or a full page URL.
 
 Vite embeds `VITE_*` values into the public frontend at build time. They must never contain a service-role key, database password, or other secret. Redeploy after changing them. For Preview deployments, use a separate test backend/project when possible; do not allow arbitrary preview domains in production `CLIENT_URL`.
 

@@ -31,16 +31,29 @@ export async function getAccessToken() {
   return data.session.access_token
 }
 
+async function fetchWithDiagnostics(request, options) {
+  try {
+    return await request()
+  } catch (error) {
+    console.warn('[api] Request failed before receiving a response.', {
+      method: options.method || 'GET',
+      apiHost: parsedApiUrl.host,
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+    })
+    throw error
+  }
+}
+
 export async function messagingRequest(path, options = {}) {
   const accessToken = await getAccessToken()
-  const response = await fetch(`${normalizedApiUrl}/api${path}`, {
+  const response = await fetchWithDiagnostics(() => fetch(`${normalizedApiUrl}/api${path}`, {
     ...options,
     headers: {
       Authorization: `Bearer ${accessToken}`,
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
     },
-  })
+  }), options)
   const result = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(result.error || 'The messaging request could not be completed.')
   return result

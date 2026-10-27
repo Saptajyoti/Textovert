@@ -1,6 +1,18 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { allowSocketRequest, corsOptions, isOriginAllowed } = require('../src/config/cors')
+const { allowSocketRequest, corsOptions, isOriginAllowed, normalizeOrigin } = require('../src/config/cors')
+
+test('normalizes a configured origin with a trailing slash', () => {
+  const configuredOrigin = normalizeOrigin('https://textovert.example/')
+  assert.equal(configuredOrigin, 'https://textovert.example')
+  assert.equal(isOriginAllowed('https://textovert.example', [configuredOrigin]), true)
+})
+
+test('rejects CLIENT_URL entries that include a path or use a non-HTTP protocol', () => {
+  assert.throws(() => normalizeOrigin('https://textovert.example/chat'), /without paths/)
+  assert.throws(() => normalizeOrigin('file://textovert.example'), /HTTP\(S\) origins/)
+  assert.throws(() => normalizeOrigin('https://user:password@textovert.example'), /without paths/)
+})
 
 test('allows requests without a browser Origin header for token-authenticated clients', () => {
   assert.equal(isOriginAllowed(undefined), true)
