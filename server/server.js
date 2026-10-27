@@ -11,6 +11,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const server = http.createServer(app)
 const io = attachSockets(server)
+app.set('io', io)
 
 server.listen(port, '0.0.0.0', () => {
   console.info(`[api] Textovert listening on port ${port}`)

@@ -1,0 +1,63 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const { isValidPushEndpoint, isValidPushKey } = require('../src/routes/notifications')
+
+const migrationPath = join(__dirname, '..', '..', 'database', 'migrations', '202610270003_notifications.sql')
+const migration = readFileSync(migrationPath, 'utf8').replace(/\s+/g, ' ').trim().toLowerCase()
+const serviceWorker = readFileSync(join(__dirname, '..', '..', 'client', 'public', 'service-worker.js'), 'utf8')
+
+test('notification migration is additive, owner-scoped, and idempotent for event insertion', () => {
+  assert.match(migration, /^-- apply once as the postgres role.*begin;/)
+  assert.match(migration, /create table public\.notification_preferences/)
+  assert.match(migration, /create table public\.notification_events/)
+  assert.match(migration, /create table public\.push_subscriptions/)
+  assert.match(migration, /alter table public\.notification_preferences enable row level security/)
+  assert.match(migration, /alter table public\.notification_events enable row level security/)
+  assert.match(migration, /alter table public\.push_subscriptions enable row level security/)
+  assert.match(migration, /recipient_id = \(select auth\.uid\(\)\)/)
+  assert.match(migration, /user_id = \(select auth\.uid\(\)\)/)
+  assert.match(migration, /event_key text not null unique/)
+  assert.match(migration, /on conflict \(event_key\) do nothing/)
+  assert.doesNotMatch(migration, /grant insert(?:\s*\([^)]*\))?\s+on table public\.notification_events/)
+  assert.doesNotMatch(migration, /drop table|truncate/)
+})
+
+test('unread counts use delivered receipts and reading a conversation clears its message alerts', () => {
+  assert.match(migration, /create index message_receipts_unread_recipient_idx/)
+  assert.match(migration, /create function public\.list_private_conversation_unread_counts\(\)/)
+  assert.match(migration, /r\.recipient_id = \(select auth\.uid\(\)\)/)
+  assert.match(migration, /r\.status = 'delivered'/)
+  assert.match(migration, /m\.sender_id <> \(select auth\.uid\(\)\)/)
+  assert.match(migration, /update public\.notification_events n set read_at = pg_catalog\.now\(\)/)
+  assert.match(migration, /return query update public\.message_receipts r/)
+})
+
+test('push subscriptions are constrained and push permissions remain optional', () => {
+  assert.match(migration, /endpoint ~ '\^https:\/\/'/)
+  assert.match(migration, /users remove their own push subscriptions/)
+  assert.match(migration, /grant select, delete on table public\.push_subscriptions to authenticated/)
+  assert.doesNotMatch(migration, /create policy .*push_subscriptions for insert/)
+  assert.match(migration, /grant select, insert, update, delete on table public\.push_subscriptions to service_role/)
+  assert.match(migration, /browser_enabled boolean not null default false/)
+  assert.match(migration, /preview_enabled boolean not null default false/)
+  assert.match(migration, /commit;$/)
+})
+
+test('push subscriptions accept only trusted HTTPS push services and well-shaped keys', () => {
+  assert.equal(isValidPushEndpoint('https://fcm.googleapis.com/fcm/send/subscription'), true)
+  assert.equal(isValidPushEndpoint('https://updates.push.services.mozilla.com/wpush/v2/subscription'), true)
+  assert.equal(isValidPushEndpoint('https://attacker.example/push'), false)
+  assert.equal(isValidPushEndpoint('http://fcm.googleapis.com/fcm/send/subscription'), false)
+  assert.equal(isValidPushEndpoint('https://127.0.0.1/push'), false)
+  assert.equal(isValidPushKey('a'.repeat(22)), true)
+  assert.equal(isValidPushKey('invalid key'), false)
+})
+
+test('service worker limits notification clicks to the Textovert chat route', () => {
+  assert.match(serviceWorker, /addEventListener\('push'/)
+  assert.match(serviceWorker, /addEventListener\('notificationclick'/)
+  assert.match(serviceWorker, /requested\.origin === self\.location\.origin/)
+  assert.match(serviceWorker, /requested\.pathname === '\/chat'/)
+})

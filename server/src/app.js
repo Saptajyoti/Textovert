@@ -5,6 +5,9 @@ const cors = require('cors')
 const { corsOptions } = require('./config/cors')
 const authRoutes = require('./routes/auth')
 const conversationRoutes = require('./routes/conversations')
+const groupRoutes = require('./routes/groups').router
+const notificationRoutes = require('./routes/notifications').router
+const mediaRoutes = require('./routes/media').router
 const healthRoutes = require('./routes/health')
 const { errorHandler, notFound } = require('./middleware/errorHandler')
 
@@ -23,6 +26,9 @@ app.use('/api', rateLimit({
 }))
 app.use('/api', healthRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/notifications', notificationRoutes)
+app.use('/api/conversations/media', mediaRoutes)
+app.use('/api/groups', groupRoutes)
 app.use('/api/conversations', conversationRoutes)
 app.use(notFound)
 app.use(errorHandler)
